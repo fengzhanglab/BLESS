@@ -170,10 +170,10 @@ def compile_clusters_sam_nobcs(rawdata_file,outfile_clust,CLUSTER_READS_THRESHOL
                 locs_g0u = float((locs_diffu>=OVERLAP_THRESHOLD).sum())/float((locs_diffu.shape[0]*locs_diffu.shape[1]))
                 locs_l0u = float((locs_diffu<OVERLAP_THRESHOLD).sum())/float((locs_diffu.shape[0]*locs_diffu.shape[1]))
 
-                with open(str.replace(outfile_clust,'.csv','')+'_'+str(chrlb)+'_'+str(chrub)+'.csv','w') as csvfile:
-                    mywriterc = csv.writer(csvfile, delimiter=',')
-                    for row in locs_diff:
-                        mywriterc.writerow(row.tolist()[0])    
+                #with open(str.replace(outfile_clust,'.csv','')+'_'+str(chrlb)+'_'+str(chrub)+'.csv','w') as csvfile:
+                #    mywriterc = csv.writer(csvfile, delimiter=',')
+                #    for row in locs_diff:
+                #        mywriterc.writerow(row.tolist()[0])    
 
             else:
                 locs_g0 = -1
