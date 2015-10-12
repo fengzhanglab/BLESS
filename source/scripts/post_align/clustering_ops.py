@@ -207,109 +207,85 @@ def threshold_uid_match(uid0,uid,threshold):
     return 1    
 
 def threshold_cluster_uid_prelinked_setup(uid_list0,threshold):
+    #build linkage_file for input into prelinked clustering -- is a python list-of-lists. 
+    #uid_list0 is a dictionary of hash codes for all unique uids containing for each uid:
+    #       1. a list of indicies of all occurances of the unique uid in originating list of reads
+    #       2. the uid sequence
+    #Each list-element of this list is a UID sequence that 1 or more reads IDENTICALLY CORRESPOND TO
+    #It takes of form as follows uid_list = [[A0,B0,C0,[D0_0,D0_1,D0_2,...]],[A1,B1,C1,[D1_0,D1_1,D1_2,...]],...]
+    #A0 is the SEQUENCE ITSELF (variable-type str)
+    #B0 is number of reads that possess the sequence A0
+    #C0 is the number of reads belonging to all UID sequences that are BOTH:
+    #       1. Within a distance "threshold" of sequence A0 and
+    #       2. Possessing read-abundances LESS THAN OR EQUAL TO B0
+    #[D0_0,D0_1,D0_2,...] is a list of list-indices belonging to the sequences summed across for C0 (fitting the same criteria). 
+    #THE FIRST OF THESE INDICES MUST CORRESPOND TO SEQUENCE A0 OUTPUTS FILE WITH EACH LINE: 
+    #A_B_C where C is the cluster-index belonged to by unique UID sequence A, itself corresponding to B reads
 
     #prepare data structure for bc clustering
     ct = 0
     uid_list = []
     for el in uid_list0:
         uid = el[1]
-
-        ct2 = 0
-        uid_ind = []
+        uidct = len(el[0])
+        A0 = uid
+        B0 = uidct
 
         #first index in D should correspond to matching sequence
-        uid_ind.append(ct)
+        D0 = []
+        D0.append(ct)
 
+        ct2 = 0
         #iterate through all barcodes for barcodes to find barcodes within theshold mismatch 
         #could speed for low n thesholds by finding theshold mm space for a barcode and hashing over that space
         for el2 in uid_list0:
-            uid2 = el2[1]
-            #if matching, just count and continue
-            #need to catch matches before they are incorporated into D
 
+            uid2 = el2[1]
+            uid2ct = len(el2[0])
+
+            #diagonal has already been appended to beginning of D0
+            #count index and continue
             if hash(uid)==hash(uid2):
                 ct2 = ct2+1
                 continue
-            #if within mm theshold, append to D and record barcode index in uid_list_rsorted
-            elif threshold_uid_match(uid,uid2,threshold)==1:
-                uid_ind.append(ct2)
+
+            #C0 is the number of reads belonging to all UID sequences that are BOTH:
+                #       1. Within a distance "threshold" of sequence A0 and
+                #       2. Possessing read-abundances LESS THAN OR EQUAL TO B0   
+            if uid2ct<=B0:
+                #if within mm theshold, append to D and record barcode index in uid_list_rsorted
+                if threshold_uid_match(uid,uid2,threshold)==1:
+                    D0.append(ct2)
+
             ct2 = ct2+1
 
-        threshold_uid_match_sum = 0
-        for ind in uid_ind:
+        C0 = 0
+        for ind in D0:
+            C0+=len(uid_list0[ind][0])
 
-            threshold_uid_match_sum = threshold_uid_match_sum+len(uid_list0[ind][0])
 
-        uid_list.append([uid, len(uid_list0[ct][0]), len(uid_list0[ct][0])+threshold_uid_match_sum, uid_ind])
+        uid_list.append([A0, B0, C0, D0])
 
         ct = ct+1
 
     return uid_list
-
-def threshold_cluster_uid_prelinked0(uid_list,threshold):
-    #RECOMMENDED: threshold should be set = 1
-    #P, subsample, prefix may be left as default
-    #identical_uid0_file is a filename (for output purposes) that may be set as an empty string
-
-    #load linkage_file into uid_list -- is a python list-of-lists. Each list-element of this list is a UID sequence that 1 or more reads IDENTICALLY CORRESPOND TO
-    #It takes of form as follows uid_list = [[A0,B0,C0,[D0_0,D0_1,D0_2,...]],[A1,B1,C1,[D1_0,D1_1,D1_2,...]],...]
-    #A0 is the SEQUENCE ITSELF (variable-type str)
-    #B0 is number of reads that possess the sequence A0
-    #C0 is the number of reads belonging to all UID sequences that are BOTH:
-    #                 1. Within a distance "threshold" of sequence A0 and
-    #                 2. Possessing read-abundances LESS THAN OR EQUAL TO B0
-    #[D0_0,D0_1,D0_2,...] is a list of list-indices belonging to the sequences summed across for C0 (fitting the same criteria). THE FIRST OF THESE INDICES MUST CORRESPOND TO SEQUENCE A0
-    #OUTPUTS FILE WITH EACH LINE: A_B_C where C is the cluster-index belonged to by unique UID sequence A, itself corresponding to B reads
-
-    #sort uid_list by decreasing read-number
-    num_uid = len(uid_list)
-    sorted_uid_list = sorted(uid_list, key=lambda row: -row[2]) #note: sorted_uid_list _REMAINS_ a pointer to uid_list
-    index_vals = [-1 for i in range(num_uid)] 
-    #print "assigning clusters ..."
-        
-    for sorted_uid_el in sorted_uid_list: 
-        #index_vals, with indices corresponding to _original_ positions in pre-sorted uid_list, are initiated at -1 (stored in list at row[3])
-        #UID's accepted into cluster with seed of index i, will be given value i in index_vals
-        #UID's rejected from all classification are given index
-
-        if index_vals[sorted_uid_el[3][0]] == -1: #if this seed has index -1 (has not been assigned to any seed itself)
-            index_vals[sorted_uid_el[3][0]] = int(sorted_uid_el[3][0]) # set cluster seed to itself
-            
-        #de-indented 2/11/14
-        my_row_rnd_vector = [[int(sorted_uid_el[3][i]), int(uid_list[sorted_uid_el[3][i]][2])] for i in range(1,len(sorted_uid_el[3]))] #set my_row_rnd_vector to list of [uid_index, RND of uid_index] for all uid_index's in linked-UID's
-        my_row_rnd_vector = sorted(my_row_rnd_vector, key=lambda el: -el[1]) #sort my_row_rnd_vector by decreasing RND
-        my_row_rnd_vector.insert(0, [int(sorted_uid_el[3][0]), int(sorted_uid_el[2])]) #add self-element (complete with uid_index and RND) to front of list, regardless of how it might have sorted internally
-        num_indices = len(sorted_uid_el[3])
-        
-        for i in range(1,num_indices):
-            if index_vals[my_row_rnd_vector[i][0]] == -1: #connected read is unassigned -- assign to current cluster seed
-                index_vals[my_row_rnd_vector[i][0]] = int(index_vals[sorted_uid_el[3][0]])        
-
-    new_uid_list = []
-    index_vals = [int(x) for x in index_vals]
-
-    #consolidate clustered UID's   
-    for i in range(num_uid):
-        if i in index_vals:
-            my_uid_list = [[uid_list[j][0], uid_list[j][1], uid_list[j][3][0]] for j in range(num_uid) if index_vals[j]==i]
-            new_uid_list.append(sorted(my_uid_list, key=lambda row: -row[1]))       
-    
-    return new_uid_list
 
 def threshold_cluster_uid_prelinked(uid_list,threshold):
     #RECOMMENDED: threshold should be set = 1
     #P, subsample, prefix may be left as default
     #identical_uid0_file is a filename (for output purposes) that may be set as an empty string
 
-    #load linkage_file into uid_list -- is a python list-of-lists. Each list-element of this list is a UID sequence that 1 or more reads IDENTICALLY CORRESPOND TO
+    #load linkage_file into uid_list -- is a python list-of-lists.
+    #Each list-element of this list is a UID sequence that 1 or more reads IDENTICALLY CORRESPOND TO
     #It takes of form as follows uid_list = [[A0,B0,C0,[D0_0,D0_1,D0_2,...]],[A1,B1,C1,[D1_0,D1_1,D1_2,...]],...]
     #A0 is the SEQUENCE ITSELF (variable-type str)
     #B0 is number of reads that possess the sequence A0
     #C0 is the number of reads belonging to all UID sequences that are BOTH:
-    #                 1. Within a distance "threshold" of sequence A0 and
-    #                 2. Possessing read-abundances LESS THAN OR EQUAL TO B0
-    #[D0_0,D0_1,D0_2,...] is a list of list-indices belonging to the sequences summed across for C0 (fitting the same criteria). THE FIRST OF THESE INDICES MUST CORRESPOND TO SEQUENCE A0
-    #OUTPUTS FILE WITH EACH LINE: A_B_C where C is the cluster-index belonged to by unique UID sequence A, itself corresponding to B reads
+    #       1. Within a distance "threshold" of sequence A0 and
+    #       2. Possessing read-abundances LESS THAN OR EQUAL TO B0
+    #[D0_0,D0_1,D0_2,...] is a list of list-indices belonging to the sequences summed across for C0 (fitting the same criteria). 
+    #THE FIRST OF THESE INDICES MUST CORRESPOND TO SEQUENCE A0 OUTPUTS FILE WITH EACH LINE: 
+    #A_B_C where C is the cluster-index belonged to by unique UID sequence A, itself corresponding to B reads
 
     #sort uid_list by decreasing read-number
     num_uid = len(uid_list)
@@ -473,99 +449,6 @@ def nncluster_chr_positions(alignments,input_format,READS_THRESHOLD,ALIGN_NN_THR
     #print 'alignment_clusters'
     #print alignment_clusters
     #print '####################'
-
-    #filter out clusters with reads less than ALIGN_CLUSTER_READS_THRESHOLD
-    ct = 0
-    name_clusters2 = []
-    alignment_clusters2 = []
-    for cluster in alignment_clusters:
-        #first item in cluster list is ibc hashcode
-        if len(cluster)>=READS_THRESHOLD:   
-            alignment_clusters2.append(cluster)
-            name_clusters2.append(name_clusters[ct])
-        
-        ct = ct + 1
-
-    return(name_clusters2, alignment_clusters2) 
-
-def nncluster_chr_positions_orientations0(alignments,input_format,READS_THRESHOLD,ALIGN_NN_THRESHOLD,ORIENTATION_ORDER):
-#input_format: 'cb'([chr, bound, id]) or 'cbb' (chr, lowerbound, upperbound, id)
-#all clustering output consists of pairs of two input loci with orientation pairing consistent with ORIENTATION_ORDER
-#ASSUMES THAT THERE IS A CONSISTENT DIRECTIONAL RELATIONSHIP BETWEEN CLUSTER PAIRS
-#EX: ALWAYS BS -> TS
-
-    name_clusters = [] 
-    alignment_clusters = [] 
-    alignments_sort_chr = {}
-    if hash(input_format)==hash('cb'):
-        for alignment in alignments:
-            if alignment[0] not in alignments_sort_chr:
-                alignments_sort_chr[alignment[0]] = []
-                alignments_sort_chr[alignment[0]].append([alignment[1], alignment[2], alignment[3]])              
-            else:
-                alignments_sort_chr[alignment[0]].append([alignment[1], alignment[2], alignment[3]])
-   
-        for chrid in alignments_sort_chr:
-            positions = alignments_sort_chr[chrid]
-         
-            ct = 0
-            FLAG = 0
-            sorted_positions = sorted(positions)
-            for position in sorted_positions:
-                #find first element in cluster with the orientation of the first element in a pair
-                if position[1]==ORIENTATION_ORDER[0]:
-                    name_clusters.append([position[2]])
-                    alignment_clusters.append([[chrid, position[0], position[1]]])
-                    FLAG = 1
-
-                elif FLAG>0:
-                    #check for accompanying second element of pair
-                    if ((position[0]-sorted_positions[ct-1][0])<=ALIGN_NN_THRESHOLD) and (position[1]==ORIENTATION_ORDER[1]):
-                        name_clusters[len(alignment_clusters)-1].append(position[2])
-                        alignment_clusters[len(alignment_clusters)-1].append([chrid, position[0], position[1]])
-
-                    FLAG = 0
-
-                ct+=1     
-
-    elif hash(input_format)==hash('cbb'):
-        for alignment in alignments:
-            if alignment[0] not in alignments_sort_chr:
-                alignments_sort_chr[alignment[0]] = []
-                alignments_sort_chr[alignment[0]].append([alignment[1], alignment[2], alignment[3], alignment[4]])               
-            else:
-                alignments_sort_chr[alignment[0]].append([alignment[1], alignment[2], alignment[3], alignment[4]])
-   
-        for chrid in alignments_sort_chr:
-            positions = alignments_sort_chr[chrid]
-          
-            ct = 0
-            FLAG = 0
-            sorted_positions = sorted(positions)
-            for position in sorted_positions:
-                #find first element in cluster with the orientation of the first element in a pair
-                #flag indicates whether preceding element is first element in a pair
-                if position[2]==ORIENTATION_ORDER[0]:
-                    name_clusters.append([position[3]])
-                    alignment_clusters.append([[chrid, position[0], position[1], position[2]]])
-                    FLAG = 1
-
-                elif FLAG>0:
-                    #check for accompanying second element of pair
-                    #upper bound of preceding cluster must be in front of lower bound of current cluster by no more than ALIGN_NN_THRESHOLD
-                    if ((position[0]-sorted_positions[ct-1][1])>0) and ((position[0]-sorted_positions[ct-1][1])<=ALIGN_NN_THRESHOLD) and (position[2]==ORIENTATION_ORDER[1]):
-                        name_clusters[len(alignment_clusters)-1].append(position[3])
-                        alignment_clusters[len(alignment_clusters)-1].append([chrid, position[0], position[1], position[2]])
-
-                    FLAG = 0
-
-                ct+=1     
-
-    ##############################
-    for el in alignment_clusters:
-        if len(el)>1:
-            print el
-    ##############################
 
     #filter out clusters with reads less than ALIGN_CLUSTER_READS_THRESHOLD
     ct = 0
